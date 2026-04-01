@@ -4,6 +4,7 @@
     "slug": "dulceria",
     "version": "1.0.0",
     "sdkVersion": "54.0.0",
+    "icon": "./assets/icon.jpg",
     "orientation": "portrait",
     "platforms": [
       "ios",
@@ -17,6 +18,12 @@
     },
     "plugins": [
       "@react-native-community/datetimepicker"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "1e91bb2b-94fb-49d3-981d-ca56423361c3"
+      }
+    },
+    "owner": "kadays-organization"
   }
 }

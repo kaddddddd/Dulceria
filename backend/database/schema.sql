@@ -2,9 +2,6 @@
 -- DULCERÍA - Script de Base de Datos MySQL
 -- ============================================
 
-CREATE DATABASE IF NOT EXISTS dulceria CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-USE dulceria;
-
 -- ============================================
 -- TABLA: vendedores
 -- ============================================
@@ -24,7 +21,7 @@ CREATE TABLE IF NOT EXISTS productos (
   precio_venta DECIMAL(10, 2) NOT NULL DEFAULT 0,
   stock INT NOT NULL DEFAULT 0,
   creado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  actualizado_en TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+  actualizado_en TIMESTAMP NULL DEFAULT NULL
 );
 
 -- ============================================
