@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/Karen/Downloads/dulceria/dulceria/frontend/src -type f -name *.jsx -o -name *.js)"
+    ]
+  }
+}
