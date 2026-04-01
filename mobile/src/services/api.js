@@ -1,5 +1,5 @@
 // Cambia esta URL por la de tu backend en Render cuando lo subas
-const BASE_URL = 'http://192.168.1.17:3001/api'; // celular físico en WiFi
+const BASE_URL = 'https://dulceria-lzto.onrender.com/api';
 
 function fetchWithTimeout(url, options = {}, timeout = 10000) {
   const controller = new AbortController();
