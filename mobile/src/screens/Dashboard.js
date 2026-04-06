@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator } from 'react-native';
 import { dashboardService } from '../services/api';
-import { C, fmt } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { fmt } from '../theme';
 
 function mesActual() {
   const hoy = new Date();
@@ -11,24 +12,40 @@ function mesActual() {
 }
 
 export default function Dashboard() {
+  const { C } = useTheme();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [fechas, setFechas] = useState(mesActual);
+  const s = makeStyles(C);
 
   useEffect(() => {
-    setLoading(true);
-    setError('');
-    dashboardService.get({ fecha_inicio: fechas.inicio, fecha_fin: fechas.fin })
-      .then(setData)
-      .catch(() => setError('No se pudo cargar el dashboard'))
-      .finally(() => setLoading(false));
+    let cancelled = false;
+    async function cargar(intentos = 0) {
+      setLoading(true);
+      setError('');
+      try {
+        const res = await dashboardService.get({ fecha_inicio: fechas.inicio, fecha_fin: fechas.fin });
+        if (!cancelled) setData(res);
+      } catch {
+        if (intentos < 3 && !cancelled) {
+          setTimeout(() => cargar(intentos + 1), 6000);
+        } else if (!cancelled) {
+          setError('No se pudo cargar el dashboard');
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    cargar();
+    return () => { cancelled = true; };
   }, [fechas]);
 
   if (loading) return (
     <View style={s.center}>
       <ActivityIndicator size="large" color={C.morado} />
       <Text style={s.loadingText}>Cargando resumen...</Text>
+      <Text style={{ fontSize: 12, color: C.textMuted, marginTop: 4 }}>Esto puede tardar unos segundos</Text>
     </View>
   );
 
@@ -45,7 +62,6 @@ export default function Dashboard() {
 
   return (
     <ScrollView style={s.scroll} contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
-      {/* Saludo */}
       <View style={{ marginBottom: 16 }}>
         <Text style={s.dateText}>
           Hoy, {new Date().toLocaleDateString('es-CO', { weekday: 'long', day: 'numeric', month: 'long' })}
@@ -53,7 +69,6 @@ export default function Dashboard() {
         <Text style={s.welcome}>¡Bienvenida! 🍬</Text>
       </View>
 
-      {/* Filtro de fechas */}
       <View style={[s.card, { flexDirection: 'row', flexWrap: 'wrap', gap: 10, alignItems: 'center' }]}>
         <View>
           <Text style={s.label}>Desde</Text>
@@ -68,24 +83,23 @@ export default function Dashboard() {
         </TouchableOpacity>
       </View>
 
-      {/* Stats */}
       <View style={s.grid}>
-        <View style={[s.statCard, { backgroundColor: '#FFF0F9', borderColor: C.rosa }]}>
+        <View style={[s.statCard, { backgroundColor: C.lilaPalido, borderColor: C.rosa }]}>
           <Text style={s.statIcon}>💰</Text>
           <Text style={s.statLabel}>Ventas</Text>
           <Text style={s.statValue}>{fmt(resumen.total_ventas)}</Text>
         </View>
-        <View style={[s.statCard, { backgroundColor: '#FFF5F5', borderColor: C.rojo }]}>
+        <View style={[s.statCard, { backgroundColor: C.lilaPalido, borderColor: C.rojo }]}>
           <Text style={s.statIcon}>📤</Text>
           <Text style={s.statLabel}>Gastos</Text>
           <Text style={s.statValue}>{fmt(resumen.total_gastos)}</Text>
         </View>
       </View>
 
-      <View style={[s.card, { backgroundColor: '#F0FDF4', borderColor: C.verde, marginBottom: 8 }]}>
+      <View style={[s.card, { backgroundColor: C.lilaPalido, borderColor: C.verde, marginBottom: 8 }]}>
         <Text style={s.statIcon}>📈</Text>
         <Text style={s.statLabel}>Ganancia neta</Text>
-        <Text style={[s.statValue, { fontSize: 22, color: '#065F46' }]}>{fmt(resumen.ganancia_neta)}</Text>
+        <Text style={[s.statValue, { fontSize: 22, color: C.verde }]}>{fmt(resumen.ganancia_neta)}</Text>
         <Text style={{ fontSize: 11, color: C.textMuted }}>{fechas.inicio} → {fechas.fin}</Text>
       </View>
 
@@ -104,14 +118,13 @@ export default function Dashboard() {
         </View>
       </View>
 
-      {/* Stock bajo */}
       {productos_bajo_stock.length > 0 && (
-        <View style={[s.card, { borderColor: C.rojo, borderWidth: 2, backgroundColor: '#FFF8F8' }]}>
+        <View style={[s.card, { borderColor: C.rojo, borderWidth: 2, backgroundColor: C.lilaPalido }]}>
           <Text style={s.panelTitle}>⚠️ Stock bajo — requiere reposición</Text>
           {productos_bajo_stock.map(p => (
             <View key={p.id} style={s.row}>
               <Text style={s.itemName}>{p.nombre}</Text>
-              <View style={[s.badge, { backgroundColor: '#FEE2E2' }]}>
+              <View style={[s.badge, { backgroundColor: C.lilaPalido }]}>
                 <Text style={{ color: C.rojo, fontWeight: '700', fontSize: 12 }}>{p.stock} unid.</Text>
               </View>
             </View>
@@ -119,7 +132,6 @@ export default function Dashboard() {
         </View>
       )}
 
-      {/* Top productos */}
       {top_productos.length > 0 && (
         <View style={s.card}>
           <Text style={s.panelTitle}>🏆 Top productos (este mes)</Text>
@@ -135,7 +147,6 @@ export default function Dashboard() {
         </View>
       )}
 
-      {/* Top vendedores */}
       {top_vendedores.length > 0 && (
         <View style={s.card}>
           <Text style={s.panelTitle}>👑 Rendimiento vendedoras</Text>
@@ -154,43 +165,45 @@ export default function Dashboard() {
   );
 }
 
-const s = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: C.bg },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
-  loadingText: { color: C.textMuted, fontSize: 14 },
-  errorText: { color: C.rojo, fontWeight: '700' },
-  dateText: { fontSize: 13, color: C.textMuted, fontWeight: '700' },
-  welcome: { fontSize: 20, fontWeight: '900', marginTop: 2, color: C.text },
-  card: {
-    backgroundColor: C.surface, borderRadius: 16, padding: 16,
-    marginBottom: 12, borderWidth: 1.5, borderColor: C.border,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 4,
-  },
-  grid: { flexDirection: 'row', gap: 10, marginBottom: 8 },
-  statCard: {
-    flex: 1, borderRadius: 16, padding: 14, borderWidth: 1.5,
-    borderColor: C.border, backgroundColor: C.surface,
-    elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 4, marginBottom: 4,
-  },
-  statIcon: { fontSize: 22, marginBottom: 4 },
-  statLabel: { fontSize: 12, color: C.textMuted, fontWeight: '600' },
-  statValue: { fontSize: 16, fontWeight: '900', color: C.text, marginTop: 2 },
-  panelTitle: { fontWeight: '800', fontSize: 14, color: C.morado, marginBottom: 10 },
-  row: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border,
-  },
-  itemName: { fontWeight: '700', fontSize: 14, color: C.text },
-  itemSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
-  amount: { fontWeight: '800', fontSize: 14 },
-  badge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
-  label: { fontSize: 11, color: C.textMuted, fontWeight: '700' },
-  dateVal: { fontSize: 13, color: C.text, fontWeight: '600' },
-  mesBtn: {
-    paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8,
-    borderWidth: 1.5, borderColor: C.border, backgroundColor: C.bg,
-  },
-  mesBtnText: { fontSize: 13, fontWeight: '700', color: C.text },
-});
+function makeStyles(C) {
+  return StyleSheet.create({
+    scroll: { flex: 1, backgroundColor: C.bg },
+    center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: C.bg },
+    loadingText: { color: C.textMuted, fontSize: 14 },
+    errorText: { color: C.rojo, fontWeight: '700' },
+    dateText: { fontSize: 13, color: C.textMuted, fontWeight: '700' },
+    welcome: { fontSize: 20, fontWeight: '900', marginTop: 2, color: C.text },
+    card: {
+      backgroundColor: C.surface, borderRadius: 16, padding: 16,
+      marginBottom: 12, borderWidth: 1.5, borderColor: C.border,
+      elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05, shadowRadius: 4,
+    },
+    grid: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+    statCard: {
+      flex: 1, borderRadius: 16, padding: 14, borderWidth: 1.5,
+      borderColor: C.border, backgroundColor: C.surface,
+      elevation: 2, shadowColor: '#000', shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.05, shadowRadius: 4, marginBottom: 4,
+    },
+    statIcon: { fontSize: 22, marginBottom: 4 },
+    statLabel: { fontSize: 12, color: C.textMuted, fontWeight: '600' },
+    statValue: { fontSize: 16, fontWeight: '900', color: C.text, marginTop: 2 },
+    panelTitle: { fontWeight: '800', fontSize: 14, color: C.morado, marginBottom: 10 },
+    row: {
+      flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+      paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border,
+    },
+    itemName: { fontWeight: '700', fontSize: 14, color: C.text },
+    itemSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
+    amount: { fontWeight: '800', fontSize: 14 },
+    badge: { borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4 },
+    label: { fontSize: 11, color: C.textMuted, fontWeight: '700' },
+    dateVal: { fontSize: 13, color: C.text, fontWeight: '600' },
+    mesBtn: {
+      paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8,
+      borderWidth: 1.5, borderColor: C.border, backgroundColor: C.bg,
+    },
+    mesBtnText: { fontSize: 13, fontWeight: '700', color: C.text },
+  });
+}

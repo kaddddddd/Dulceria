@@ -1,7 +1,8 @@
-// Cambia esta URL por la de tu backend en Render cuando lo subas
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
 const BASE_URL = 'https://dulceria-lzto.onrender.com/api';
 
-function fetchWithTimeout(url, options = {}, timeout = 10000) {
+function fetchWithTimeout(url, options = {}, timeout = 15000) {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeout);
   return fetch(url, { ...options, signal: controller.signal })
@@ -14,8 +15,28 @@ async function handleResponse(res) {
   return data;
 }
 
+// GET con caché: muestra datos guardados si el servidor no responde
+async function getWithCache(url) {
+  const cacheKey = `cache_${url}`;
+  try {
+    const res = await fetchWithTimeout(url);
+    const data = await handleResponse(res);
+    await AsyncStorage.setItem(cacheKey, JSON.stringify(data));
+    return data;
+  } catch (err) {
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) return JSON.parse(cached);
+    throw err;
+  }
+}
+
+// Ping para mantener Render despierto
+export function pingBackend() {
+  fetch(`${BASE_URL}/productos`).catch(() => {});
+}
+
 export const productosService = {
-  getAll: () => fetchWithTimeout(`${BASE_URL}/productos`).then(handleResponse),
+  getAll: () => getWithCache(`${BASE_URL}/productos`),
   create: (data) => fetchWithTimeout(`${BASE_URL}/productos`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   }).then(handleResponse),
@@ -28,7 +49,7 @@ export const productosService = {
 export const ventasService = {
   getAll: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return fetchWithTimeout(`${BASE_URL}/ventas${query ? '?' + query : ''}`).then(handleResponse);
+    return getWithCache(`${BASE_URL}/ventas${query ? '?' + query : ''}`);
   },
   create: (data) => fetchWithTimeout(`${BASE_URL}/ventas`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
@@ -39,7 +60,7 @@ export const ventasService = {
 export const gastosService = {
   getAll: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return fetchWithTimeout(`${BASE_URL}/gastos${query ? '?' + query : ''}`).then(handleResponse);
+    return getWithCache(`${BASE_URL}/gastos${query ? '?' + query : ''}`);
   },
   create: (data) => fetchWithTimeout(`${BASE_URL}/gastos`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
@@ -51,7 +72,7 @@ export const gastosService = {
 };
 
 export const vendedoresService = {
-  getAll: () => fetchWithTimeout(`${BASE_URL}/vendedores`).then(handleResponse),
+  getAll: () => getWithCache(`${BASE_URL}/vendedores`),
   create: (data) => fetchWithTimeout(`${BASE_URL}/vendedores`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   }).then(handleResponse),
@@ -64,12 +85,12 @@ export const vendedoresService = {
 export const dashboardService = {
   get: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return fetchWithTimeout(`${BASE_URL}/dashboard${query ? '?' + query : ''}`).then(handleResponse);
+    return getWithCache(`${BASE_URL}/dashboard${query ? '?' + query : ''}`);
   },
 };
 
 export const categoriasGastosService = {
-  getAll: () => fetchWithTimeout(`${BASE_URL}/categorias-gastos`).then(handleResponse),
+  getAll: () => getWithCache(`${BASE_URL}/categorias-gastos`),
   create: (data) => fetchWithTimeout(`${BASE_URL}/categorias-gastos`, {
     method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(data),
   }).then(handleResponse),
@@ -79,7 +100,7 @@ export const categoriasGastosService = {
 export const repartoService = {
   get: (params = {}) => {
     const query = new URLSearchParams(params).toString();
-    return fetchWithTimeout(`${BASE_URL}/reparto${query ? '?' + query : ''}`).then(handleResponse);
+    return getWithCache(`${BASE_URL}/reparto${query ? '?' + query : ''}`);
   },
 };
 

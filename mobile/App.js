@@ -1,9 +1,10 @@
-import React from 'react';
-import { Text, StatusBar, View } from 'react-native';
+import React, { useEffect } from 'react';
+import { Text, StatusBar } from 'react-native';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { ThemeProvider, useTheme } from './src/context/ThemeContext';
 import TopBar    from './src/components/TopBar';
 import Dashboard from './src/screens/Dashboard';
 import Ventas    from './src/screens/Ventas';
@@ -11,7 +12,7 @@ import Productos from './src/screens/Productos';
 import Gastos    from './src/screens/Gastos';
 import Vendedores from './src/screens/Vendedores';
 import Reparto   from './src/screens/Reparto';
-import { C }     from './src/theme';
+import { pingBackend } from './src/services/api';
 
 const Tab = createBottomTabNavigator();
 
@@ -24,10 +25,21 @@ const TABS = [
   { name: 'Reparto',    component: Reparto,    icon: '💵' },
 ];
 
-export default function App() {
+function AppContent() {
+  const { C, isDark } = useTheme();
+
+  useEffect(() => {
+    pingBackend();
+    const interval = setInterval(pingBackend, 10 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, []);
+
   return (
-    <SafeAreaProvider>
-      <StatusBar barStyle="light-content" backgroundColor={C.morado} />
+    <>
+      <StatusBar
+        barStyle={isDark ? 'light-content' : 'light-content'}
+        backgroundColor={C.moradoClaro}
+      />
       <NavigationContainer>
         <Tab.Navigator
           screenOptions={({ route }) => ({
@@ -46,7 +58,7 @@ export default function App() {
             tabBarActiveTintColor: C.morado,
             tabBarInactiveTintColor: C.textMuted,
             tabBarStyle: {
-              backgroundColor: '#fff',
+              backgroundColor: C.surface,
               borderTopColor: C.border,
               borderTopWidth: 1.5,
               height: 62,
@@ -59,6 +71,16 @@ export default function App() {
           ))}
         </Tab.Navigator>
       </NavigationContainer>
+    </>
+  );
+}
+
+export default function App() {
+  return (
+    <SafeAreaProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </SafeAreaProvider>
   );
 }

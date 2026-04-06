@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, Platform } from 'react-native';
 import DateTimePicker from '@react-native-community/datetimepicker';
-import { C } from '../theme';
+import { useTheme } from '../context/ThemeContext';
 
 // value: 'YYYY-MM-DD' string
 // onChange: (newValue: 'YYYY-MM-DD') => void
-export default function DateInput({ value, onChange, label }) {
+export default function DateInput({ value, onChange }) {
   const [show, setShow] = useState(false);
+  const { C } = useTheme();
 
-  const date = value ? new Date(value + 'T12:00:00') : new Date();
+  // Normaliza el valor a solo YYYY-MM-DD sin importar si viene con hora
+  const cleanValue = value ? value.split('T')[0] : null;
+  const date = cleanValue ? new Date(cleanValue + 'T12:00:00') : new Date();
 
   function handleChange(event, selected) {
     setShow(Platform.OS === 'ios');
@@ -20,15 +23,18 @@ export default function DateInput({ value, onChange, label }) {
     }
   }
 
-  const display = value
-    ? new Date(value + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
+  const display = cleanValue
+    ? new Date(cleanValue + 'T12:00:00').toLocaleDateString('es-CO', { day: '2-digit', month: 'short', year: 'numeric' })
     : 'Seleccionar fecha';
 
   return (
     <View>
-      <TouchableOpacity style={s.btn} onPress={() => setShow(true)}>
-        <Text style={s.icon}>📅</Text>
-        <Text style={[s.text, !value && { color: C.textMuted }]}>{display}</Text>
+      <TouchableOpacity
+        style={{ flexDirection: 'row', alignItems: 'center', gap: 8, borderWidth: 1.5, borderColor: C.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, backgroundColor: C.surface }}
+        onPress={() => setShow(true)}
+      >
+        <Text style={{ fontSize: 16 }}>📅</Text>
+        <Text style={{ fontSize: 14, color: cleanValue ? C.text : C.textMuted }}>{display}</Text>
       </TouchableOpacity>
       {show && (
         <DateTimePicker
@@ -42,13 +48,3 @@ export default function DateInput({ value, onChange, label }) {
     </View>
   );
 }
-
-const s = StyleSheet.create({
-  btn: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    borderWidth: 1.5, borderColor: C.border, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 12, backgroundColor: '#fff',
-  },
-  icon: { fontSize: 16 },
-  text: { fontSize: 14, color: C.text },
-});

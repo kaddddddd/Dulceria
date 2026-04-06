@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator,
 } from 'react-native';
@@ -6,11 +6,14 @@ import { productosService, vendedoresService } from '../services/api';
 import PickerModal from '../components/PickerModal';
 import Toast from '../components/Toast';
 import Confirm from '../components/Confirm';
-import { C, fmt } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { fmt } from '../theme';
 
 const EMPTY = { nombre: '', precio_compra: '', precio_venta: '', stock: '', propietario_id: '' };
+const FILTROS = ['Todos', 'Stock bajo', 'Sin stock'];
 
 export default function Productos() {
+  const { C } = useTheme();
   const [productos,  setProductos]  = useState([]);
   const [vendedores, setVendedores] = useState([]);
   const [loading,    setLoading]    = useState(true);
@@ -20,6 +23,9 @@ export default function Productos() {
   const [toast,      setToast]      = useState(null);
   const [confirmId,  setConfirmId]  = useState(null);
   const [saving,     setSaving]     = useState(false);
+  const [busqueda,   setBusqueda]   = useState('');
+  const [filtro,     setFiltro]     = useState('Todos');
+  const s = makeStyles(C);
 
   function showToast(msg, type = 'success') { setToast({ message: msg, type }); }
 
@@ -33,6 +39,16 @@ export default function Productos() {
     loadProductos();
     vendedoresService.getAll().then(setVendedores).catch(() => {});
   }, []);
+
+  const productosFiltrados = useMemo(() => {
+    let lista = productos;
+    if (busqueda.trim()) {
+      lista = lista.filter(p => p.nombre.toLowerCase().includes(busqueda.toLowerCase()));
+    }
+    if (filtro === 'Stock bajo') lista = lista.filter(p => p.stock > 0 && p.stock < 10);
+    if (filtro === 'Sin stock')  lista = lista.filter(p => p.stock === 0);
+    return lista;
+  }, [productos, busqueda, filtro]);
 
   function handleEdit(p) {
     setForm({
@@ -111,7 +127,38 @@ export default function Productos() {
           )}
         </View>
 
-        {/* Formulario */}
+        {!showForm && (
+          <View style={s.searchBox}>
+            <Text style={s.searchIcon}>🔍</Text>
+            <TextInput
+              style={s.searchInput}
+              placeholder="Buscar producto..."
+              value={busqueda}
+              onChangeText={setBusqueda}
+              placeholderTextColor={C.textMuted}
+            />
+            {busqueda.length > 0 && (
+              <TouchableOpacity onPress={() => setBusqueda('')}>
+                <Text style={{ color: C.textMuted, fontSize: 16, paddingHorizontal: 8 }}>✕</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        )}
+
+        {!showForm && (
+          <View style={s.filtros}>
+            {FILTROS.map(f => (
+              <TouchableOpacity
+                key={f}
+                style={[s.filtroBadge, filtro === f && s.filtroActivo]}
+                onPress={() => setFiltro(f)}
+              >
+                <Text style={[s.filtroText, filtro === f && s.filtroTextoActivo]}>{f}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+
         {showForm && (
           <View style={[s.card, { borderColor: C.rosa, borderWidth: 2 }]}>
             <Text style={s.panelTitle}>{editId ? '✏️ Editar producto' : '➕ Nuevo producto'}</Text>
@@ -119,28 +166,27 @@ export default function Productos() {
             <Text style={s.label}>Nombre del producto *</Text>
             <TextInput
               style={s.input} placeholder="Ej: Gomitas de fresa"
+              placeholderTextColor={C.textMuted}
               value={form.nombre} onChangeText={v => setForm(f => ({ ...f, nombre: v }))}
             />
 
             <View style={{ flexDirection: 'row', gap: 10 }}>
               <View style={{ flex: 1 }}>
                 <Text style={s.label}>Precio compra</Text>
-                <TextInput style={s.input} placeholder="0" keyboardType="numeric"
+                <TextInput style={s.input} placeholder="0" keyboardType="numeric" placeholderTextColor={C.textMuted}
                   value={form.precio_compra} onChangeText={v => setForm(f => ({ ...f, precio_compra: v }))} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={s.label}>Precio venta *</Text>
-                <TextInput style={s.input} placeholder="0" keyboardType="numeric"
+                <TextInput style={s.input} placeholder="0" keyboardType="numeric" placeholderTextColor={C.textMuted}
                   value={form.precio_venta} onChangeText={v => setForm(f => ({ ...f, precio_venta: v }))} />
               </View>
             </View>
 
             <Text style={s.label}>{editId ? 'Stock actual *' : 'Stock inicial *'}</Text>
-            <TextInput style={s.input} placeholder="0" keyboardType="numeric"
+            <TextInput style={s.input} placeholder="0" keyboardType="numeric" placeholderTextColor={C.textMuted}
               value={form.stock} onChangeText={v => setForm(f => ({ ...f, stock: v }))} />
-            {editId && (
-              <Text style={s.hint}>Este valor reemplaza el stock actual.</Text>
-            )}
+            {editId && <Text style={s.hint}>Este valor reemplaza el stock actual.</Text>}
 
             <Text style={s.label}>¿Este producto es de alguien en específico?</Text>
             <PickerModal
@@ -166,16 +212,17 @@ export default function Productos() {
           </View>
         )}
 
-        {/* Lista */}
         {loading ? (
           <ActivityIndicator size="large" color={C.morado} style={{ marginTop: 40 }} />
-        ) : productos.length === 0 ? (
+        ) : productosFiltrados.length === 0 ? (
           <View style={s.empty}>
             <Text style={{ fontSize: 40 }}>📦</Text>
-            <Text style={s.emptyText}>No hay productos registrados</Text>
+            <Text style={s.emptyText}>
+              {busqueda || filtro !== 'Todos' ? 'Sin resultados' : 'No hay productos registrados'}
+            </Text>
           </View>
         ) : (
-          productos.map(p => (
+          productosFiltrados.map(p => (
             <View key={p.id} style={s.card}>
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <View style={{ flex: 1 }}>
@@ -215,37 +262,52 @@ export default function Productos() {
   );
 }
 
-const s = StyleSheet.create({
-  header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  pageTitle: { fontSize: 20, fontWeight: '900', color: C.text },
-  btnAdd: {
-    backgroundColor: C.morado, paddingHorizontal: 16, paddingVertical: 10,
-    borderRadius: 12,
-  },
-  btnAddText: { color: '#fff', fontWeight: '700', fontSize: 13 },
-  card: {
-    backgroundColor: C.surface, borderRadius: 16, padding: 16,
-    marginBottom: 12, borderWidth: 1.5, borderColor: C.border, elevation: 2,
-  },
-  panelTitle: { fontWeight: '800', fontSize: 14, color: C.morado, marginBottom: 12 },
-  label: { fontSize: 12, fontWeight: '700', color: C.textMuted, marginBottom: 6, marginTop: 10 },
-  input: {
-    borderWidth: 1.5, borderColor: C.border, borderRadius: 10,
-    paddingHorizontal: 12, paddingVertical: 10, fontSize: 14, backgroundColor: '#fff',
-  },
-  hint: { fontSize: 11, color: C.textMuted, marginTop: 4 },
-  propietarioHint: { fontSize: 12, color: C.morado, fontWeight: '600', marginTop: 6 },
-  btn: { padding: 14, borderRadius: 12, alignItems: 'center', flex: 1 },
-  btnPrimary: { backgroundColor: C.morado },
-  btnPrimaryText: { color: '#fff', fontWeight: '700' },
-  btnGhost: { borderWidth: 1.5, borderColor: C.border },
-  btnGhostText: { fontWeight: '700', color: C.text },
-  btnEdit: { padding: 8, borderRadius: 8, backgroundColor: C.lilaPalido },
-  btnDanger: { padding: 8, borderRadius: 8, backgroundColor: '#FEE2E2' },
-  itemName: { fontWeight: '700', fontSize: 15, color: C.text },
-  itemSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
-  badge: { backgroundColor: C.lilaPalido, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
-  badgeText: { fontSize: 11, color: C.morado, fontWeight: '700' },
-  empty: { alignItems: 'center', padding: 40, gap: 8 },
-  emptyText: { fontSize: 15, color: C.textMuted, fontWeight: '600' },
-});
+function makeStyles(C) {
+  return StyleSheet.create({
+    header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
+    pageTitle: { fontSize: 20, fontWeight: '900', color: C.text },
+    btnAdd: { backgroundColor: C.morado, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 12 },
+    btnAddText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+    searchBox: {
+      flexDirection: 'row', alignItems: 'center',
+      backgroundColor: C.surface, borderRadius: 12, borderWidth: 1.5,
+      borderColor: C.border, paddingHorizontal: 12, marginBottom: 12,
+    },
+    searchIcon: { fontSize: 16, marginRight: 8 },
+    searchInput: { flex: 1, fontSize: 14, paddingVertical: 10, color: C.text },
+    filtros: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+    filtroBadge: {
+      paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
+      borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surface,
+    },
+    filtroActivo: { backgroundColor: C.morado, borderColor: C.morado },
+    filtroText: { fontSize: 12, fontWeight: '700', color: C.textMuted },
+    filtroTextoActivo: { color: '#fff' },
+    card: {
+      backgroundColor: C.surface, borderRadius: 16, padding: 16,
+      marginBottom: 12, borderWidth: 1.5, borderColor: C.border, elevation: 2,
+    },
+    panelTitle: { fontWeight: '800', fontSize: 14, color: C.morado, marginBottom: 12 },
+    label: { fontSize: 12, fontWeight: '700', color: C.textMuted, marginBottom: 6, marginTop: 10 },
+    input: {
+      borderWidth: 1.5, borderColor: C.border, borderRadius: 10,
+      paddingHorizontal: 12, paddingVertical: 10, fontSize: 14,
+      backgroundColor: C.surface, color: C.text,
+    },
+    hint: { fontSize: 11, color: C.textMuted, marginTop: 4 },
+    propietarioHint: { fontSize: 12, color: C.morado, fontWeight: '600', marginTop: 6 },
+    btn: { padding: 14, borderRadius: 12, alignItems: 'center', flex: 1 },
+    btnPrimary: { backgroundColor: C.morado },
+    btnPrimaryText: { color: '#fff', fontWeight: '700' },
+    btnGhost: { borderWidth: 1.5, borderColor: C.border },
+    btnGhostText: { fontWeight: '700', color: C.text },
+    btnEdit: { padding: 8, borderRadius: 8, backgroundColor: C.lilaPalido },
+    btnDanger: { padding: 8, borderRadius: 8, backgroundColor: '#FEE2E2' },
+    itemName: { fontWeight: '700', fontSize: 15, color: C.text },
+    itemSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
+    badge: { backgroundColor: C.lilaPalido, borderRadius: 20, paddingHorizontal: 8, paddingVertical: 3 },
+    badgeText: { fontSize: 11, color: C.morado, fontWeight: '700' },
+    empty: { alignItems: 'center', padding: 40, gap: 8 },
+    emptyText: { fontSize: 15, color: C.textMuted, fontWeight: '600' },
+  });
+}

@@ -1,21 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet,
-  TextInput, ActivityIndicator,
+  ActivityIndicator,
 } from 'react-native';
 import { ventasService, productosService, vendedoresService } from '../services/api';
 import PickerModal from '../components/PickerModal';
 import Toast from '../components/Toast';
 import Confirm from '../components/Confirm';
-import { C, fmt } from '../theme';
+import { useTheme } from '../context/ThemeContext';
+import { fmt } from '../theme';
 
 function fmtDate(d) {
-  return new Date(d).toLocaleString('es-CO', {
-    day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
+  return new Date(d).toLocaleString('es-CO', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export default function Ventas() {
+  const { C } = useTheme();
   const [tab, setTab] = useState('nueva');
   const [productos, setProductos] = useState([]);
   const [vendedores, setVendedores] = useState([]);
@@ -28,6 +28,7 @@ export default function Ventas() {
   const [toast, setToast] = useState(null);
   const [confirmId, setConfirmId] = useState(null);
   const [expandedId, setExpandedId] = useState(null);
+  const s = makeStyles(C);
 
   function showToast(msg, type = 'success') { setToast({ message: msg, type }); }
 
@@ -37,14 +38,10 @@ export default function Ventas() {
       .catch(() => showToast('Error al cargar datos', 'error'));
   }, []);
 
-  useEffect(() => {
-    if (tab === 'historial') loadVentas();
-  }, [tab]);
+  useEffect(() => { if (tab === 'historial') loadVentas(); }, [tab]);
 
   function loadVentas() {
-    ventasService.getAll()
-      .then(setVentas)
-      .catch(() => showToast('Error al cargar historial', 'error'));
+    ventasService.getAll().then(setVentas).catch(() => showToast('Error al cargar historial', 'error'));
   }
 
   function handleAddToCart() {
@@ -54,21 +51,15 @@ export default function Ventas() {
     const yaEnCarrito = cart.find(c => c.producto_id === prod.id);
     const cantidadEnCarrito = yaEnCarrito ? yaEnCarrito.cantidad : 0;
     if (cantidadEnCarrito + cantidad > prod.stock) {
-      showToast(`Stock insuficiente. Disponible: ${prod.stock - cantidadEnCarrito}`, 'error');
-      return;
+      showToast(`Stock insuficiente. Disponible: ${prod.stock - cantidadEnCarrito}`, 'error'); return;
     }
     if (yaEnCarrito) {
       setCart(cart.map(c => c.producto_id === prod.id
-        ? { ...c, cantidad: c.cantidad + cantidad, subtotal: (c.cantidad + cantidad) * c.precio_unitario }
-        : c));
+        ? { ...c, cantidad: c.cantidad + cantidad, subtotal: (c.cantidad + cantidad) * c.precio_unitario } : c));
     } else {
-      setCart([...cart, {
-        producto_id: prod.id, nombre: prod.nombre, cantidad,
-        precio_unitario: prod.precio_venta, subtotal: cantidad * prod.precio_venta,
-      }]);
+      setCart([...cart, { producto_id: prod.id, nombre: prod.nombre, cantidad, precio_unitario: prod.precio_venta, subtotal: cantidad * prod.precio_venta }]);
     }
-    setProductoSel('');
-    setCantidad(1);
+    setProductoSel(''); setCantidad(1);
   }
 
   function removeFromCart(id) { setCart(cart.filter(c => c.producto_id !== id)); }
@@ -91,54 +82,34 @@ export default function Ventas() {
     if (cart.length === 0) { showToast('Agrega productos al carrito', 'error'); return; }
     setLoading(true);
     try {
-      await ventasService.create({
-        vendedor_id: Number(vendedorId),
-        items: cart.map(c => ({ producto_id: c.producto_id, cantidad: c.cantidad, precio_unitario: c.precio_unitario })),
-      });
+      await ventasService.create({ vendedor_id: Number(vendedorId), items: cart.map(c => ({ producto_id: c.producto_id, cantidad: c.cantidad, precio_unitario: c.precio_unitario })) });
       showToast('¡Venta registrada! 🎉');
-      setCart([]);
-      setVendedorId('');
+      setCart([]); setVendedorId('');
       productosService.getAll().then(setProductos);
-    } catch (err) {
-      showToast(err.message, 'error');
-    } finally {
-      setLoading(false);
-    }
+    } catch (err) { showToast(err.message, 'error'); }
+    finally { setLoading(false); }
   }
 
   async function handleDeleteVenta(id) {
     try {
       await ventasService.delete(id);
       showToast('Venta eliminada y stock restaurado');
-      setConfirmId(null);
-      loadVentas();
+      setConfirmId(null); loadVentas();
       productosService.getAll().then(setProductos);
-    } catch (err) {
-      showToast(err.message, 'error');
-      setConfirmId(null);
-    }
+    } catch (err) { showToast(err.message, 'error'); setConfirmId(null); }
   }
 
-  const prodOptions = productos.filter(p => p.stock > 0).map(p => ({
-    value: p.id, label: `${p.nombre} · Stock: ${p.stock} · ${fmt(p.precio_venta)}`,
-  }));
+  const prodOptions = productos.filter(p => p.stock > 0).map(p => ({ value: p.id, label: `${p.nombre} · Stock: ${p.stock} · ${fmt(p.precio_venta)}` }));
   const vendOptions = vendedores.map(v => ({ value: v.id, label: v.nombre }));
 
   return (
     <View style={{ flex: 1, backgroundColor: C.bg }}>
       {toast && <Toast {...toast} onClose={() => setToast(null)} />}
-      {confirmId && (
-        <Confirm
-          message="¿Eliminar esta venta? El stock será restaurado."
-          onConfirm={() => handleDeleteVenta(confirmId)}
-          onCancel={() => setConfirmId(null)}
-        />
-      )}
+      {confirmId && <Confirm message="¿Eliminar esta venta? El stock será restaurado." onConfirm={() => handleDeleteVenta(confirmId)} onCancel={() => setConfirmId(null)} />}
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 24 }}>
         <Text style={s.pageTitle}>🛒 Ventas</Text>
 
-        {/* Tabs */}
         <View style={s.tabs}>
           {['nueva', 'historial'].map(t => (
             <TouchableOpacity key={t} style={[s.tab, tab === t && s.tabActive]} onPress={() => setTab(t)}>
@@ -151,27 +122,15 @@ export default function Ventas() {
 
         {tab === 'nueva' && (
           <>
-            {/* Vendedor */}
             <View style={s.card}>
               <Text style={s.panelTitle}>👤 Vendedor</Text>
-              <PickerModal
-                options={vendOptions}
-                value={vendedorId}
-                onChange={setVendedorId}
-                placeholder="— Selecciona vendedor —"
-              />
+              <PickerModal options={vendOptions} value={vendedorId} onChange={setVendedorId} placeholder="— Selecciona vendedor —" />
             </View>
 
-            {/* Agregar producto */}
             <View style={s.card}>
               <Text style={s.panelTitle}>🍬 Agregar producto</Text>
               <Text style={s.label}>Producto</Text>
-              <PickerModal
-                options={prodOptions}
-                value={productoSel}
-                onChange={v => setProductoSel(String(v))}
-                placeholder="— Selecciona producto —"
-              />
+              <PickerModal options={prodOptions} value={productoSel} onChange={v => setProductoSel(String(v))} placeholder="— Selecciona producto —" />
               <Text style={[s.label, { marginTop: 12 }]}>Cantidad</Text>
               <View style={s.qtyRow}>
                 <TouchableOpacity style={s.qtyBtn} onPress={() => setCantidad(Math.max(1, cantidad - 1))}>
@@ -187,7 +146,6 @@ export default function Ventas() {
               </TouchableOpacity>
             </View>
 
-            {/* Carrito */}
             {cart.length > 0 && (
               <View style={s.card}>
                 <Text style={s.panelTitle}>🛍️ Carrito ({cart.length})</Text>
@@ -216,9 +174,7 @@ export default function Ventas() {
                   <Text style={s.totalAmount}>{fmt(total)}</Text>
                 </View>
                 <TouchableOpacity style={[s.btn, s.btnPrimary]} onPress={handleVender} disabled={loading}>
-                  {loading
-                    ? <ActivityIndicator color="#fff" />
-                    : <Text style={s.btnPrimaryText}>✅ Confirmar venta</Text>}
+                  {loading ? <ActivityIndicator color="#fff" /> : <Text style={s.btnPrimaryText}>✅ Confirmar venta</Text>}
                 </TouchableOpacity>
               </View>
             )}
@@ -254,16 +210,14 @@ export default function Ventas() {
                   </View>
                 </View>
                 <TouchableOpacity onPress={() => setExpandedId(expandedId === v.id ? null : v.id)}>
-                  <Text style={s.expandBtn}>
-                    {expandedId === v.id ? '▲ Ocultar detalle' : '▼ Ver detalle'}
-                  </Text>
+                  <Text style={s.expandBtn}>{expandedId === v.id ? '▲ Ocultar detalle' : '▼ Ver detalle'}</Text>
                 </TouchableOpacity>
                 {expandedId === v.id && v.detalle && (
                   <View style={{ marginTop: 10 }}>
                     {v.detalle.map(d => (
                       <View key={d.id} style={s.rowBetween}>
                         <Text style={{ fontSize: 13, color: C.text }}>{d.producto_nombre} × {d.cantidad}</Text>
-                        <Text style={{ fontWeight: '700', fontSize: 13 }}>{fmt(d.subtotal)}</Text>
+                        <Text style={{ fontWeight: '700', fontSize: 13, color: C.text }}>{fmt(d.subtotal)}</Text>
                       </View>
                     ))}
                   </View>
@@ -277,49 +231,39 @@ export default function Ventas() {
   );
 }
 
-const s = StyleSheet.create({
-  pageTitle: { fontSize: 20, fontWeight: '900', color: C.text, marginBottom: 16 },
-  tabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
-  tab: {
-    flex: 1, padding: 12, borderRadius: 12, alignItems: 'center',
-    borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surface,
-  },
-  tabActive: { backgroundColor: C.morado, borderColor: C.morado },
-  tabText: { fontSize: 13, fontWeight: '700', color: C.text },
-  tabTextActive: { color: '#fff' },
-  card: {
-    backgroundColor: C.surface, borderRadius: 16, padding: 16,
-    marginBottom: 12, borderWidth: 1.5, borderColor: C.border, elevation: 2,
-  },
-  panelTitle: { fontWeight: '800', fontSize: 14, color: C.morado, marginBottom: 10 },
-  label: { fontSize: 12, fontWeight: '700', color: C.textMuted, marginBottom: 6 },
-  qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  qtyBtn: {
-    width: 36, height: 36, borderRadius: 10, backgroundColor: C.lilaPalido,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  qtyBtnText: { fontSize: 18, fontWeight: '700', color: C.morado },
-  qtyVal: { fontSize: 18, fontWeight: '800', minWidth: 32, textAlign: 'center', color: C.text },
-  cartItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
-  cartName: { fontWeight: '700', fontSize: 14, color: C.text },
-  cartPrice: { fontSize: 12, color: C.textMuted, marginTop: 2 },
-  totalBar: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: C.lilaPalido, borderRadius: 12, padding: 14, marginVertical: 12,
-  },
-  totalLabel: { fontSize: 11, fontWeight: '800', color: C.morado, letterSpacing: 0.5 },
-  totalAmount: { fontSize: 20, fontWeight: '900', color: C.morado },
-  btn: { padding: 14, borderRadius: 12, alignItems: 'center' },
-  btnPrimary: { backgroundColor: C.morado },
-  btnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 15 },
-  btnGhost: { borderWidth: 1.5, borderColor: C.border },
-  btnGhostText: { fontWeight: '700', color: C.text },
-  btnDanger: { padding: 8, borderRadius: 8, backgroundColor: '#FEE2E2' },
-  rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  itemName: { fontWeight: '700', fontSize: 14, color: C.text },
-  itemSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
-  amount: { fontWeight: '800', fontSize: 15 },
-  expandBtn: { fontSize: 12, fontWeight: '700', color: C.rosa, marginTop: 8 },
-  empty: { alignItems: 'center', padding: 40, gap: 8 },
-  emptyText: { fontSize: 15, color: C.textMuted, fontWeight: '600' },
-});
+function makeStyles(C) {
+  return StyleSheet.create({
+    pageTitle: { fontSize: 20, fontWeight: '900', color: C.text, marginBottom: 16 },
+    tabs: { flexDirection: 'row', gap: 8, marginBottom: 16 },
+    tab: { flex: 1, padding: 12, borderRadius: 12, alignItems: 'center', borderWidth: 1.5, borderColor: C.border, backgroundColor: C.surface },
+    tabActive: { backgroundColor: C.morado, borderColor: C.morado },
+    tabText: { fontSize: 13, fontWeight: '700', color: C.text },
+    tabTextActive: { color: '#fff' },
+    card: { backgroundColor: C.surface, borderRadius: 16, padding: 16, marginBottom: 12, borderWidth: 1.5, borderColor: C.border, elevation: 2 },
+    panelTitle: { fontWeight: '800', fontSize: 14, color: C.morado, marginBottom: 10 },
+    label: { fontSize: 12, fontWeight: '700', color: C.textMuted, marginBottom: 6 },
+    qtyRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    qtyBtn: { width: 36, height: 36, borderRadius: 10, backgroundColor: C.lilaPalido, alignItems: 'center', justifyContent: 'center' },
+    qtyBtnText: { fontSize: 18, fontWeight: '700', color: C.morado },
+    qtyVal: { fontSize: 18, fontWeight: '800', minWidth: 32, textAlign: 'center', color: C.text },
+    cartItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: C.border },
+    cartName: { fontWeight: '700', fontSize: 14, color: C.text },
+    cartPrice: { fontSize: 12, color: C.textMuted, marginTop: 2 },
+    totalBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: C.lilaPalido, borderRadius: 12, padding: 14, marginVertical: 12 },
+    totalLabel: { fontSize: 11, fontWeight: '800', color: C.morado, letterSpacing: 0.5 },
+    totalAmount: { fontSize: 20, fontWeight: '900', color: C.morado },
+    btn: { padding: 14, borderRadius: 12, alignItems: 'center' },
+    btnPrimary: { backgroundColor: C.morado },
+    btnPrimaryText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+    btnGhost: { borderWidth: 1.5, borderColor: C.border },
+    btnGhostText: { fontWeight: '700', color: C.text },
+    btnDanger: { padding: 8, borderRadius: 8, backgroundColor: '#FEE2E2' },
+    rowBetween: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+    itemName: { fontWeight: '700', fontSize: 14, color: C.text },
+    itemSub: { fontSize: 12, color: C.textMuted, marginTop: 2 },
+    amount: { fontWeight: '800', fontSize: 15 },
+    expandBtn: { fontSize: 12, fontWeight: '700', color: C.rosa, marginTop: 8 },
+    empty: { alignItems: 'center', padding: 40, gap: 8 },
+    emptyText: { fontSize: 15, color: C.textMuted, fontWeight: '600' },
+  });
+}
